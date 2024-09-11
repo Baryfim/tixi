@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY, 
     email VARCHAR(255) UNIQUE NOT NULL, 
-    code VARCHAR(255)
+    code VARCHAR(255),
+    code_expiration TIMESTAMP
 );

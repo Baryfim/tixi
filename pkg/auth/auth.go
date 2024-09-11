@@ -95,24 +95,35 @@ func (s *AuthServiceServer) LoginByEmail(ctx context.Context, req *authpb.LoginB
 
 func (s *AuthServiceServer) ValidateCodeEmail(ctx context.Context, req *authpb.ValidateCodeEmailRequest) (*authpb.ValidateCodeEmailResponse, error) {
 	var code string
+	var codeExpiration time.Time
 
+	// Загружаем SQL-запрос
 	query, err := sql.LoadSQLFile("auth/code-validate.sql")
 	if err != nil {
 		log.Println("Ошибка загрузки SQL-запроса: " + err.Error())
 		return nil, err
 	}
 
-	err = db.DBConn.QueryRow(ctx, query, req.Email).Scan(&code)
+	// Извлекаем код и время его истечения
+	err = db.DBConn.QueryRow(ctx, query, req.Email).Scan(&code, &codeExpiration)
 	if err != nil {
 		log.Printf("Ошибка запроса к базе данных: %v", err)
 		return nil, errors.New("пользователь не найден")
 	}
 
+	// Проверяем, истёк ли срок действия кода
+	if time.Now().After(codeExpiration) {
+		log.Println("Время действия кода истекло")
+		return nil, errors.New("время действия кода истекло")
+	}
+
+	// Сравниваем коды
 	if fmt.Sprintf("%v", code) != fmt.Sprintf("%v", req.Code) {
 		log.Println("неверный код")
 		return nil, errors.New("неверный код")
 	}
 
+	// Создаём JWT-токен при успешной валидации кода
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Email: req.Email,
