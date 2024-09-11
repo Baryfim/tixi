@@ -5,29 +5,33 @@ package auth;
 option go_package = "/api/proto/authpb";
 
 service AuthService {
-    rpc Register(RegisterRequest) returns (RegisterResponse);
-    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc LoginByEmail(LoginByEmailRequest) returns (LoginByEmailResponse);
+    rpc ValidateCodeEmail(ValidateCodeEmailRequest) returns (ValidateCodeEmailResponse);
     rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
 }
 
-message RegisterRequest {
-    string username = 1;
-    string password = 2;
+// Отправляем email и ожидаем, что нам туда прийдёт код доступа
+message LoginByEmailRequest {
+    string email = 1;
 }
 
-message RegisterResponse {
+message LoginByEmailResponse {
     bool success = 1;
 }
 
-message LoginRequest {
-    string username = 1;
-    string password = 2;
+
+// Отправляем email и код, для проверки корректности код
+message ValidateCodeEmailRequest {
+    string email = 1;
+    string code = 2;
 }
 
-message LoginResponse {
+message ValidateCodeEmailResponse {
     string token = 1;
 }
 
+
+// Отправляем jwt токен для проверки его корректности 
 message ValidateTokenRequest {
     string token = 1;
 }

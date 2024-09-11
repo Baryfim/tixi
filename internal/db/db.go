@@ -12,8 +12,7 @@ import (
 var DBConn *pgx.Conn
 
 func InitDB() {
-	cfg := config.Cfg
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName)
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", config.Cfg.DBUser, config.Cfg.DBPassword, config.Cfg.DBHost, config.Cfg.DBPort, config.Cfg.DBName)
 
 	conn, err := pgx.Connect(context.Background(), connStr)
 	if err != nil {

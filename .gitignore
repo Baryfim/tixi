@@ -18,6 +18,8 @@
 *.swo
 *~
 
+config-dev.yaml
+
 # Лог файлы
 *.log
 
@@ -31,4 +33,3 @@ Thumbs.db
 
 # Генерируемые файлы протокола
 *.pb.go
-config-dev.yaml

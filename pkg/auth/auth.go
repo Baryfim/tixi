@@ -1,85 +1,42 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
+	"log"
+	"net/smtp"
 	"time"
+
+	crand "crypto/rand"
+	"math/big"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/tixiby/api/proto/authpb"
 	"github.com/tixiby/internal/config"
 	"github.com/tixiby/internal/db"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/tixiby/pkg/sql"
 )
 
-var Cfg config.Config
-var jwtSecret = []byte(Cfg.JWTSecret)
+var jwtSecret = []byte(config.Cfg.JWTSecret)
 
 type AuthServiceServer struct {
 	authpb.UnimplementedAuthServiceServer
 }
 
-// Claims структура для JWT
 type Claims struct {
-	Username string `json:"username"`
+	Email string `json:"email"`
 	jwt.StandardClaims
 }
 
-// Функция для хэширования пароля
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
-// Проверка пароля с хэшем
-func CheckPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
-}
-
-// Регистрация нового пользователя
-func (s *AuthServiceServer) Register(ctx context.Context, req *authpb.RegisterRequest) (*authpb.RegisterResponse, error) {
-	passwordHash, err := HashPassword(req.Password)
+func generateCode(min, max int) int {
+	n, err := crand.Int(crand.Reader, big.NewInt(int64(max-min)))
 	if err != nil {
-		return nil, err
+		log.Println("Ошибка генерации кода: " + err.Error())
 	}
-
-	_, err = db.DBConn.Exec(ctx, "INSERT INTO users (username, password_hash) VALUES ($1, $2)", req.Username, passwordHash)
-	if err != nil {
-		return nil, fmt.Errorf("не удалось сохранить пользователя: %v", err)
-	}
-
-	return &authpb.RegisterResponse{Success: true}, nil
-}
-
-func (s *AuthServiceServer) Login(ctx context.Context, req *authpb.LoginRequest) (*authpb.LoginResponse, error) {
-	var passwordHash string
-
-	err := db.DBConn.QueryRow(ctx, "SELECT password_hash FROM users WHERE username = $1", req.Username).Scan(&passwordHash)
-	if err != nil {
-		return nil, errors.New("пользователь не найден")
-	}
-
-	if !CheckPasswordHash(req.Password, passwordHash) {
-		return nil, errors.New("неверный пароль")
-	}
-
-	expirationTime := time.Now().Add(24 * time.Hour)
-	claims := &Claims{
-		Username: req.Username,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtSecret)
-	if err != nil {
-		return nil, err
-	}
-
-	return &authpb.LoginResponse{Token: tokenString}, nil
+	return int(n.Int64()) + min
 }
 
 func (s *AuthServiceServer) ValidateToken(ctx context.Context, req *authpb.ValidateTokenRequest) (*authpb.ValidateTokenResponse, error) {
@@ -92,4 +49,84 @@ func (s *AuthServiceServer) ValidateToken(ctx context.Context, req *authpb.Valid
 	}
 
 	return &authpb.ValidateTokenResponse{IsValid: true}, nil
+}
+
+func (s *AuthServiceServer) LoginByEmail(ctx context.Context, req *authpb.LoginByEmailRequest) (*authpb.LoginByEmailResponse, error) {
+	to := []string{
+		req.Email,
+	}
+
+	auth := smtp.PlainAuth("", config.Cfg.MailFrom, config.Cfg.MailPassword, config.Cfg.SMTPHost)
+	temp, _ := template.ParseFiles("./templates/email.html")
+
+	var body bytes.Buffer
+
+	mimeHeaders := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+	body.Write([]byte(fmt.Sprintf("Subject: This is a test subject \n%s\n\n", mimeHeaders)))
+
+	code := generateCode(1000, 9999)
+	temp.Execute(&body, struct {
+		Name    string
+		Message string
+	}{
+		Name:    "TIXI Company",
+		Message: fmt.Sprintf("%v", code),
+	})
+
+	query, err := sql.LoadSQLFile("auth/code-generate.sql")
+	if err != nil {
+		log.Println("Ошибка загрузки SQL-запроса: " + err.Error())
+		return &authpb.LoginByEmailResponse{Success: false}, err
+	}
+
+	_, err = db.DBConn.Exec(ctx, query, req.Email, fmt.Sprintf("%v", code))
+	if err != nil {
+		fmt.Printf("Не сохранить записи: %v", err)
+		return &authpb.LoginByEmailResponse{Success: false}, err
+	}
+
+	if err = smtp.SendMail(fmt.Sprintf("%s:587", config.Cfg.SMTPHost), auth, config.Cfg.MailFrom, to, body.Bytes()); err != nil {
+		fmt.Println("Error sending email:", err)
+		return &authpb.LoginByEmailResponse{Success: false}, err
+	}
+
+	return &authpb.LoginByEmailResponse{Success: true}, nil
+}
+
+func (s *AuthServiceServer) ValidateCodeEmail(ctx context.Context, req *authpb.ValidateCodeEmailRequest) (*authpb.ValidateCodeEmailResponse, error) {
+	var code string
+
+	query, err := sql.LoadSQLFile("auth/code-validate.sql")
+	if err != nil {
+		log.Println("Ошибка загрузки SQL-запроса: " + err.Error())
+		return nil, err
+	}
+
+	err = db.DBConn.QueryRow(ctx, query, req.Email).Scan(&code)
+	if err != nil {
+		log.Printf("Ошибка запроса к базе данных: %v", err)
+		return nil, errors.New("пользователь не найден")
+	}
+
+	if fmt.Sprintf("%v", code) != fmt.Sprintf("%v", req.Code) {
+		log.Println("неверный код")
+		return nil, errors.New("неверный код")
+	}
+
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Claims{
+		Email: req.Email,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	// Возвращаем токен
+	return &authpb.ValidateCodeEmailResponse{Token: tokenString}, nil
 }
