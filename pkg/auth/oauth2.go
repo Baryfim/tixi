@@ -12,12 +12,7 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// var (
-// 	clientID     = config.Cfg.GoogleClientID
-// 	clientSecret = config.Cfg.GoogleClientSecret
-// )
-
-// Google OAuth2 конфигурация
+// Конфигурация Google OAuth2
 var oauthGoogleConfig = &oauth2.Config{
 	ClientID:     "697503104115-ui1i318hgo5h9d439tanq51s6gtc3pd8.apps.googleusercontent.com",
 	ClientSecret: "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",
@@ -26,7 +21,7 @@ var oauthGoogleConfig = &oauth2.Config{
 	Endpoint:     google.Endpoint,
 }
 
-// Обработчик для перенаправления пользователя на страницу авторизации Google
+// Обработчик перенаправления пользователя на страницу авторизации Google
 func GoogleLoginHandler(w http.ResponseWriter, r *http.Request) {
 	url := oauthGoogleConfig.AuthCodeURL("randomstate", oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
@@ -34,21 +29,20 @@ func GoogleLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 // Обработчик для получения OAuth-кода и обмена его на токен
 func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
-	// Получить код авторизации от Google
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		http.Error(w, "Missing code", http.StatusBadRequest)
+		http.Error(w, "Missing authorization code", http.StatusBadRequest)
 		return
 	}
 
-	// Обменять код на токен
+	// Обмен кода на токен
 	token, err := oauthGoogleConfig.Exchange(context.Background(), code)
 	if err != nil {
-		http.Error(w, "Token exchange failed", http.StatusInternalServerError)
+		http.Error(w, "Failed to exchange token", http.StatusInternalServerError)
 		return
 	}
 
-	// Получить пользовательскую информацию с помощью полученного токена
+	// Получение информации о пользователе
 	client := oauthGoogleConfig.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
@@ -58,7 +52,12 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	var userInfo map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		http.Error(w, "Failed to decode user info", http.StatusInternalServerError)
+		return
+	}
 
+	// Создание JWT токена
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Email: fmt.Sprint(userInfo["email"]),
@@ -67,22 +66,23 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	tokenJWT := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := tokenJWT.SignedString(jwtSecret)
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := jwtToken.SignedString(jwtSecret)
 	if err != nil {
-		http.Error(w, "Email not found", http.StatusBadRequest)
+		http.Error(w, "Failed to sign JWT token", http.StatusInternalServerError)
+		return
 	}
 
+	// Отправка ответа с токеном
 	response := map[string]string{
 		"token": tokenString,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
-// Инициализация обработчиков аутентификации
+// Инициализация маршрутов
 func InitAuthHandles(mux *http.ServeMux) {
-	mux.HandleFunc("/login", GoogleLoginHandler)       // Обработчик для входа через Google
-	mux.HandleFunc("/callback", GoogleCallbackHandler) // Обработчик для callback от Google
+	mux.HandleFunc("/login", GoogleLoginHandler)
+	mux.HandleFunc("/callback", GoogleCallbackHandler)
 }
