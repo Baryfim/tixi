@@ -7,19 +7,22 @@ import (
 )
 
 type Config struct {
-	GRPCPort     string `mapstructure:"grpc_port"`
-	JWTSecret    string `mapstructure:"jwt_secret"`
-	MailFrom     string `mapstructure:"mail_from"`
-	MailPassword string `mapstructure:"mail_password"`
-	SMTPHost     string `mapstructure:"smtp_host"`
-	SMTPPort     string `mapstructure:"smtp_port"`
-	SSLCert      string `mapstructure:"ssl_cert"`
-	SSLKey       string `mapstructure:"ssl_key"`
-	DBHost       string `mapstructure:"db_host"`
-	DBPort       string `mapstructure:"db_port"`
-	DBUser       string `mapstructure:"db_user"`
-	DBPassword   string `mapstructure:"db_password"`
-	DBName       string `mapstructure:"db_name"`
+	GRPCPort           string `mapstructure:"grpc_port"`
+	GoogleClientID     string `mapstructure:"google_client_id"`
+	GoogleClientSecret string `mapstructure:"googel_client_secret"`
+	RESTPort           string `mapstructure:"rest_port"`
+	JWTSecret          string `mapstructure:"jwt_secret"`
+	MailFrom           string `mapstructure:"mail_from"`
+	MailPassword       string `mapstructure:"mail_password"`
+	SMTPHost           string `mapstructure:"smtp_host"`
+	SMTPPort           string `mapstructure:"smtp_port"`
+	SSLCert            string `mapstructure:"ssl_cert"`
+	SSLKey             string `mapstructure:"ssl_key"`
+	DBHost             string `mapstructure:"db_host"`
+	DBPort             string `mapstructure:"db_port"`
+	DBUser             string `mapstructure:"db_user"`
+	DBPassword         string `mapstructure:"db_password"`
+	DBName             string `mapstructure:"db_name"`
 }
 
 var Cfg Config
