@@ -8,6 +8,10 @@ import (
 
 type Config struct {
 	GRPCPort           string `mapstructure:"grpc_port"`
+	TwilioAccountSid   string `mapstructure:"twilio_account_sid"`
+	TwilioAuthToken    string `mapstructure:"twilio_auth_token"`
+	TwilioPhoneNumber  string `mapstructure:"twilio_phone_number"`
+	ToPhoneNumber      string `mapstructure:"to_phone_number"`
 	GoogleClientID     string `mapstructure:"google_client_id"`
 	GoogleClientSecret string `mapstructure:"googel_client_secret"`
 	RESTPort           string `mapstructure:"rest_port"`

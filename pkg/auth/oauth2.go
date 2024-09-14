@@ -61,6 +61,7 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Email: fmt.Sprint(userInfo["email"]),
+		Phone: "",
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},

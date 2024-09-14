@@ -6,7 +6,8 @@ option go_package = "/api/proto/authpb";
 
 service AuthService {
     rpc LoginByEmail(LoginByEmailRequest) returns (LoginByEmailResponse);
-    rpc ValidateCodeEmail(ValidateCodeEmailRequest) returns (ValidateCodeEmailResponse);
+    rpc LoginByPhoneNumber(LoginByPhoneNumberRequest) returns (LoginByPhoneNumberResponse);
+    rpc ValidateCode(ValidateCodeRequest) returns (ValidateCodeResponse);
     rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
 }
 
@@ -19,14 +20,23 @@ message LoginByEmailResponse {
     bool success = 1;
 }
 
-
-// Отправляем email и код, для проверки корректности код
-message ValidateCodeEmailRequest {
-    string email = 1;
-    string code = 2;
+// Отправляем номер телефона и ожидаем, что нам туда прийдёт код доступа
+message LoginByPhoneNumberRequest {
+    string phone = 1;
 }
 
-message ValidateCodeEmailResponse {
+message LoginByPhoneNumberResponse {
+    bool success = 1;
+}
+
+// Отправляем email и код, для проверки корректности код
+message ValidateCodeRequest {
+    string email = 1;
+    string phone = 2;
+    string code = 3;
+}
+
+message ValidateCodeResponse {
     string token = 1;
 }
 
